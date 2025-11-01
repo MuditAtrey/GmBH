@@ -1,119 +1,209 @@
-// Arduino R4 Minima - Command Receiver
-// Receives JSON commands via serial and executes them
+/*
+ * Arduino R4 Minima - Binary Protocol Receiver
+ * 
+ * Receives binary protocol commands via hardware serial and controls peripherals
+ * 
+ * Hardware Connections:
+ * - Arduino RX0 ← ESP8266 D1 (GPIO5) TX
+ * - Arduino TX1 → ESP8266 D2 (GPIO4) RX
+ * - Common GND
+ * 
+ * Example Peripherals (optional, for demonstration):
+ * - Rotary Encoder: CLK=2, DT=3, SW=4
+ * - OLED Display: SDA=A4, SCL=A5 (I2C)
+ * - LED: Built-in LED_BUILTIN
+ */
+
 #include <Arduino.h>
+#include "ArduinoProtocol.h"
 
+// Protocol handler (uses Serial for communication with ESP8266)
+// Note: For Arduino R4, Serial is the USB-Serial. Use Serial1 for hardware serial if available.
+// For Uno/Nano, Serial is the only UART (shared with USB)
+// For testing, we'll use Serial and assume ESP8266 is connected to Arduino's RX/TX
+ProtocolHandler protocol(&Serial);
+
+// LED state
 #define LED_PIN LED_BUILTIN
-
-// Blink task state
 struct {
-    bool active;
-    unsigned int duration;
+    bool blinking;
+    uint16_t duration;
     unsigned long lastToggle;
     bool state;
-} blinkTask = {false, 500, 0, false};
+} ledState = {false, 500, 0, false};
 
-// Command buffer
-String commandBuffer = "";
+// Simulated rotary encoder (replace with real encoder library if needed)
+struct {
+    int16_t position;
+    int8_t velocity;
+    bool buttonPressed;
+    unsigned long lastUpdate;
+} encoder = {0, 0, false, 0};
+
+// OLED simulation (replace with real library like Adafruit_SSD1306)
+struct {
+    bool initialized;
+    char lastText[64];
+    uint8_t lastX;
+    uint8_t lastY;
+} oled = {false, "", 0, 0};
 
 void setup() {
-    Serial.begin(115200);
+    // Hardware serial at 57600 (must match ESP8266)
+    Serial.begin(57600);
+    
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
     
-    delay(1000);
+    // Small delay for serial initialization
+    delay(100);
     
-    // Send ready signal
-    Serial.println("{\"status\":\"ready\",\"device\":\"Arduino R4 Minima\",\"version\":\"1.0\"}");
+    // Send ready signal (PONG in response to implicit PING)
+    // Actually, we should wait for PING first, but let's be proactive
+    delay(500);
 }
 
-void processCommand(String cmd) {
-    cmd.trim();
+void handleLedSet(const ProtocolFrame& frame) {
+    PayloadParser parser(frame.payload, frame.length);
+    uint8_t state;
     
-    // Simple JSON parsing (no library needed for simple commands)
-    if (cmd.indexOf("\"type\":\"blink\"") > 0) {
-        // Extract duration
-        int durStart = cmd.indexOf("\"duration\":") + 11;
-        int durEnd = cmd.indexOf(",", durStart);
-        if (durEnd == -1) durEnd = cmd.indexOf("}", durStart);
+    if (parser.readUint8(state)) {
+        ledState.blinking = false;
+        digitalWrite(LED_PIN, state ? HIGH : LOW);
+        ledState.state = state;
         
-        String durStr = cmd.substring(durStart, durEnd);
-        unsigned int duration = durStr.toInt();
-        
+        protocol.sendAck();
+    } else {
+        protocol.sendError(ERR_INVALID_PARAM);
+    }
+}
+
+void handleLedBlink(const ProtocolFrame& frame) {
+    PayloadParser parser(frame.payload, frame.length);
+    uint16_t duration;
+    
+    if (parser.readUint16(duration)) {
         if (duration >= 50 && duration <= 5000) {
-            blinkTask.duration = duration;
-            blinkTask.active = true;
-            blinkTask.lastToggle = millis();
-            blinkTask.state = true;
+            ledState.blinking = true;
+            ledState.duration = duration;
+            ledState.lastToggle = millis();
+            ledState.state = true;
             digitalWrite(LED_PIN, HIGH);
             
-            Serial.print("{\"status\":\"blink_started\",\"duration\":");
-            Serial.print(duration);
-            Serial.println("}");
+            protocol.sendAck();
         } else {
-            Serial.println("{\"error\":\"Invalid duration (50-5000ms)\"}");
+            protocol.sendError(ERR_INVALID_PARAM);
         }
-    }
-    else if (cmd.indexOf("\"type\":\"led_on\"") > 0) {
-        blinkTask.active = false;
-        digitalWrite(LED_PIN, HIGH);
-        Serial.println("{\"status\":\"led_on\"}");
-    }
-    else if (cmd.indexOf("\"type\":\"led_off\"") > 0) {
-        blinkTask.active = false;
-        digitalWrite(LED_PIN, LOW);
-        Serial.println("{\"status\":\"led_off\"}");
-    }
-    else if (cmd.indexOf("\"type\":\"stop\"") > 0) {
-        blinkTask.active = false;
-        digitalWrite(LED_PIN, LOW);
-        Serial.println("{\"status\":\"stopped\"}");
-    }
-    else if (cmd.indexOf("\"type\":\"ping\"") > 0) {
-        Serial.print("{\"status\":\"pong\",\"uptime\":");
-        Serial.print(millis());
-        Serial.println("}");
-    }
-    else if (cmd.indexOf("\"type\":\"status\"") > 0) {
-        Serial.print("{\"status\":\"ok\",\"uptime\":");
-        Serial.print(millis());
-        Serial.print(",\"blinking\":");
-        Serial.print(blinkTask.active ? "true" : "false");
-        Serial.print(",\"duration\":");
-        Serial.print(blinkTask.duration);
-        Serial.print(",\"led_state\":");
-        Serial.print(digitalRead(LED_PIN) ? "true" : "false");
-        Serial.println("}");
-    }
-    else {
-        Serial.println("{\"error\":\"Unknown command\"}");
+    } else {
+        protocol.sendError(ERR_INVALID_PARAM);
     }
 }
 
-void updateBlink() {
-    if (!blinkTask.active) return;
+void handleEncoderRead(const ProtocolFrame& frame) {
+    // Read simulated encoder (in real app, read from hardware)
+    // For demo, we'll just send current position
+    
+    uint8_t payload[4];
+    PayloadBuilder builder(payload, sizeof(payload));
+    
+    builder.addInt16(encoder.position);
+    builder.addUint8((uint8_t)encoder.velocity);
+    builder.addUint8(encoder.buttonPressed ? 1 : 0);
+    
+    protocol.sendFrame(CMD_ENCODER_DATA, payload, builder.size());
+}
+
+void handleOledText(const ProtocolFrame& frame) {
+    PayloadParser parser(frame.payload, frame.length);
+    uint8_t x, y;
+    char text[64];
+    
+    if (parser.readUint8(x) && parser.readUint8(y) && parser.readString(text, sizeof(text))) {
+        // In real implementation, would call display.setCursor(x, y); display.print(text);
+        oled.lastX = x;
+        oled.lastY = y;
+        strncpy(oled.lastText, text, sizeof(oled.lastText) - 1);
+        oled.initialized = true;
+        
+        protocol.sendAck();
+    } else {
+        protocol.sendError(ERR_INVALID_PARAM);
+    }
+}
+
+void handleOledClear(const ProtocolFrame& frame) {
+    // In real implementation: display.clearDisplay(); display.display();
+    oled.lastText[0] = '\0';
+    protocol.sendAck();
+}
+
+void processCommand(const ProtocolFrame& frame) {
+    switch (frame.commandId) {
+        case CMD_PING:
+            protocol.sendCommand(CMD_PONG);
+            break;
+            
+        case CMD_LED_SET:
+            handleLedSet(frame);
+            break;
+            
+        case CMD_LED_BLINK:
+            handleLedBlink(frame);
+            break;
+            
+        case CMD_ENCODER_READ:
+            handleEncoderRead(frame);
+            break;
+            
+        case CMD_OLED_TEXT:
+            handleOledText(frame);
+            break;
+            
+        case CMD_OLED_CLEAR:
+            handleOledClear(frame);
+            break;
+            
+        default:
+            protocol.sendError(ERR_INVALID_CMD);
+            break;
+    }
+}
+
+void updateLedBlink() {
+    if (!ledState.blinking) return;
     
     unsigned long now = millis();
-    if (now - blinkTask.lastToggle >= blinkTask.duration) {
-        blinkTask.state = !blinkTask.state;
-        digitalWrite(LED_PIN, blinkTask.state ? HIGH : LOW);
-        blinkTask.lastToggle = now;
+    if (now - ledState.lastToggle >= ledState.duration) {
+        ledState.state = !ledState.state;
+        digitalWrite(LED_PIN, ledState.state ? HIGH : LOW);
+        ledState.lastToggle = now;
+    }
+}
+
+void updateSimulatedEncoder() {
+    // Simulate encoder changes (for testing without hardware)
+    // In real app, this would read actual encoder pins
+    unsigned long now = millis();
+    if (now - encoder.lastUpdate > 1000) {
+        encoder.position += random(-5, 6);
+        encoder.velocity = random(-3, 4);
+        encoder.lastUpdate = now;
     }
 }
 
 void loop() {
-    // Read commands from serial
-    while (Serial.available()) {
-        char c = Serial.read();
-        if (c == '\n' || c == '\r') {
-            if (commandBuffer.length() > 0) {
-                processCommand(commandBuffer);
-                commandBuffer = "";
-            }
-        } else {
-            commandBuffer += c;
-        }
+    // Receive and process protocol frames
+    ProtocolFrame frame;
+    if (protocol.receiveFrame(frame)) {
+        processCommand(frame);
     }
     
-    // Update blink task
-    updateBlink();
+    // Update LED blink task
+    updateLedBlink();
+    
+    // Update simulated encoder
+    updateSimulatedEncoder();
+    
+    // Small delay to prevent tight loop
+    delay(1);
 }
