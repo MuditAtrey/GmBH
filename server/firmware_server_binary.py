@@ -8,6 +8,7 @@ from flask import Flask, jsonify, request, render_template_string
 import json
 from datetime import datetime
 from queue import Queue
+import itertools
 import binary_protocol as proto
 
 app = Flask(__name__)
@@ -17,6 +18,8 @@ saved_commands = {}
 command_queue = Queue()
 device_logs = []
 MAX_LOGS = 100
+command_counter = itertools.count(1)
+pending_requests = {}
 
 # HTML Template
 HTML_TEMPLATE = """
@@ -506,8 +509,81 @@ HTML_TEMPLATE = """
 """
 
 
-# Global state for encoder data
+# Global state for encoder data and command tracking
 last_encoder_data = None
+
+
+def add_log(message: str) -> None:
+    """Add a timestamped entry to the device log."""
+    device_logs.insert(0, f"{datetime.now().strftime('%H:%M:%S')} - {message}")
+    if len(device_logs) > MAX_LOGS:
+        device_logs.pop()
+
+
+def command_name(cmd_id: int) -> str:
+    """Return a friendly command name for logging."""
+    try:
+        return proto.CommandID(cmd_id).name
+    except ValueError:
+        return f"CMD_0x{cmd_id:02X}"
+
+
+def build_frame_entry(command: dict) -> dict:
+    """Convert a high-level command dict into a binary frame entry."""
+    cmd_type = (command or {}).get('type')
+    if not cmd_type:
+        raise ValueError('Command missing "type" field')
+
+    description = command.get('description') or cmd_type
+    builder = proto.PayloadBuilder()
+
+    def ensure(ok: bool, message: str) -> None:
+        if not ok:
+            raise ValueError(message)
+
+    if cmd_type == 'ping':
+        cmd_id = proto.CommandID.CMD_PING
+    elif cmd_type == 'led_set':
+        cmd_id = proto.CommandID.CMD_LED_SET
+        state = 1 if command.get('state') else 0
+        ensure(builder.add_uint8(state), 'Failed to encode LED state')
+    elif cmd_type == 'led_blink':
+        cmd_id = proto.CommandID.CMD_LED_BLINK
+        duration = int(command.get('duration', 500))
+        duration = max(1, min(duration, 65535))
+        ensure(builder.add_uint16(duration), 'Failed to encode blink duration')
+    elif cmd_type == 'encoder_read':
+        cmd_id = proto.CommandID.CMD_ENCODER_READ
+    elif cmd_type == 'oled_text':
+        cmd_id = proto.CommandID.CMD_OLED_TEXT
+        x = int(command.get('x', 0)) & 0xFF
+        y = int(command.get('y', 0)) & 0xFF
+        text = command.get('text', '')
+        ensure(builder.add_uint8(x), 'Failed to encode OLED X')
+        ensure(builder.add_uint8(y), 'Failed to encode OLED Y')
+        ensure(builder.add_string(text), 'Failed to encode OLED text')
+    elif cmd_type == 'oled_clear':
+        cmd_id = proto.CommandID.CMD_OLED_CLEAR
+    else:
+        raise ValueError(f'Unsupported command type: {cmd_type}')
+
+    payload = builder.get_payload()
+    entry = {
+        'request_id': next(command_counter),
+        'cmd_id': int(cmd_id),
+        'payload_hex': payload.hex(),
+        'description': description,
+        'original': command,
+        'queued_at': datetime.utcnow().isoformat(),
+    }
+    pending_requests[entry['request_id']] = {
+        'description': description,
+        'status': 'queued',
+        'original': command,
+        'queued_at': entry['queued_at'],
+    }
+    add_log(f"Queued [{entry['request_id']}] {description} → {command_name(entry['cmd_id'])}")
+    return entry
 
 
 @app.route('/')

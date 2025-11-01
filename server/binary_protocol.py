@@ -54,13 +54,13 @@ class CommandID(IntEnum):
 
 class ErrorCode(IntEnum):
     """Error codes matching C++ enum"""
-    ERR_OK = 0x00
-    ERR_INVALID_CMD = 0x01
-    ERR_INVALID_CRC = 0x02
-    ERR_TIMEOUT = 0x03
-    ERR_BUFFER_OVERFLOW = 0x04
-    ERR_INVALID_PARAM = 0x05
-    ERR_NOT_READY = 0x06
+    PROTO_ERR_OK = 0x00
+    PROTO_ERR_INVALID_CMD = 0x01
+    PROTO_ERR_INVALID_CRC = 0x02
+    PROTO_ERR_TIMEOUT = 0x03
+    PROTO_ERR_BUFFER_OVERFLOW = 0x04
+    PROTO_ERR_INVALID_PARAM = 0x05
+    PROTO_ERR_NOT_READY = 0x06
 
 
 class PayloadBuilder:

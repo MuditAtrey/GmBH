@@ -228,6 +228,19 @@ void pollServerForCommand() {
                 Serial.print("   → LED_BLINK duration=");
                 Serial.println(duration);
             }
+            else if (cmd.indexOf("\"type\":\"led_set\"") > 0) {
+                cmdId = CMD_LED_SET;
+                
+                // Extract state parameter
+                int stateStart = cmd.indexOf("\"state\":") + 8;
+                String stateStr = cmd.substring(stateStart, stateStart + 10);
+                stateStr.trim();
+                uint8_t state = (stateStr.indexOf("true") >= 0) ? 1 : 0;
+                
+                builder.addUint8(state);
+                Serial.print("   → LED_SET state=");
+                Serial.println(state ? "ON" : "OFF");
+            }
             else if (cmd.indexOf("\"type\":\"led_on\"") > 0) {
                 cmdId = CMD_LED_SET;
                 builder.addUint8(1);  // state = ON

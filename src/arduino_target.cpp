@@ -17,11 +17,11 @@
 #include <Arduino.h>
 #include "ArduinoProtocol.h"
 
-// Protocol handler (uses Serial for communication with ESP8266)
-// Note: For Arduino R4, Serial is the USB-Serial. Use Serial1 for hardware serial if available.
-// For Uno/Nano, Serial is the only UART (shared with USB)
-// For testing, we'll use Serial and assume ESP8266 is connected to Arduino's RX/TX
-ProtocolHandler protocol(&Serial);
+// Protocol handler (uses Serial1 for ESP8266, Serial for debug)
+// Arduino R4 Minima has two UARTs:
+// - Serial (USB) for debugging
+// - Serial1 (RX0/TX1 pins) for ESP8266 communication
+ProtocolHandler protocol(&Serial1);
 
 // LED state
 #define LED_PIN LED_BUILTIN
@@ -49,17 +49,24 @@ struct {
 } oled = {false, "", 0, 0};
 
 void setup() {
-    // Hardware serial at 57600 (must match ESP8266)
-    Serial.begin(57600);
+    // USB serial for debugging
+    Serial.begin(115200);
+    while (!Serial && millis() < 5000); // Wait for Serial or timeout after 5s
+    
+    Serial.println("=== ARDUINO R4 STARTING ===");
+    Serial.println("Build time: " __DATE__ " " __TIME__);
+    
+    // Hardware serial for ESP8266 at 57600 (must match ESP8266)
+    Serial1.begin(57600);
     
     pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, HIGH); // Turn on LED to show we're alive
+    delay(500);
     digitalWrite(LED_PIN, LOW);
     
-    // Small delay for serial initialization
-    delay(100);
+    Serial.println("Arduino R4 Binary Protocol Ready");
+    Serial.println("Waiting for ESP8266...");
     
-    // Send ready signal (PONG in response to implicit PING)
-    // Actually, we should wait for PING first, but let's be proactive
     delay(500);
 }
 
@@ -74,7 +81,7 @@ void handleLedSet(const ProtocolFrame& frame) {
         
         protocol.sendAck();
     } else {
-        protocol.sendError(ERR_INVALID_PARAM);
+        protocol.sendError(PROTO_ERR_INVALID_PARAM);
     }
 }
 
@@ -92,10 +99,10 @@ void handleLedBlink(const ProtocolFrame& frame) {
             
             protocol.sendAck();
         } else {
-            protocol.sendError(ERR_INVALID_PARAM);
+            protocol.sendError(PROTO_ERR_INVALID_PARAM);
         }
     } else {
-        protocol.sendError(ERR_INVALID_PARAM);
+        protocol.sendError(PROTO_ERR_INVALID_PARAM);
     }
 }
 
@@ -127,7 +134,7 @@ void handleOledText(const ProtocolFrame& frame) {
         
         protocol.sendAck();
     } else {
-        protocol.sendError(ERR_INVALID_PARAM);
+        protocol.sendError(PROTO_ERR_INVALID_PARAM);
     }
 }
 
@@ -138,33 +145,43 @@ void handleOledClear(const ProtocolFrame& frame) {
 }
 
 void processCommand(const ProtocolFrame& frame) {
+    Serial.print("CMD: 0x");
+    Serial.println(frame.commandId, HEX);
+    
     switch (frame.commandId) {
         case CMD_PING:
+            Serial.println("→ PONG");
             protocol.sendCommand(CMD_PONG);
             break;
             
         case CMD_LED_SET:
+            Serial.println("→ LED_SET");
             handleLedSet(frame);
             break;
             
         case CMD_LED_BLINK:
+            Serial.println("→ LED_BLINK");
             handleLedBlink(frame);
             break;
             
         case CMD_ENCODER_READ:
+            Serial.println("→ ENCODER_READ");
             handleEncoderRead(frame);
             break;
             
         case CMD_OLED_TEXT:
+            Serial.println("→ OLED_TEXT");
             handleOledText(frame);
             break;
             
         case CMD_OLED_CLEAR:
+            Serial.println("→ OLED_CLEAR");
             handleOledClear(frame);
             break;
             
         default:
-            protocol.sendError(ERR_INVALID_CMD);
+            Serial.println("→ ERROR: Unknown command");
+            protocol.sendError(PROTO_ERR_INVALID_CMD);
             break;
     }
 }
@@ -192,6 +209,14 @@ void updateSimulatedEncoder() {
 }
 
 void loop() {
+    static unsigned long lastDebug = 0;
+    
+    // Debug heartbeat every 2 seconds
+    if (millis() - lastDebug > 2000) {
+        Serial.print(".");
+        lastDebug = millis();
+    }
+    
     // Receive and process protocol frames
     ProtocolFrame frame;
     if (protocol.receiveFrame(frame)) {
