@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Designer - Visual Programming</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
+            color: #333;
+            overflow: hidden;
+        }
+        
+        /* Add animated gradient background */
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 15s ease infinite;
+            z-index: -1;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 220px 1fr 260px;
+            grid-template-rows: 45px 1fr 180px;
+            height: 100vh;
+            gap: 6px;
+            padding: 6px;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 8px 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header .actions button {
+            margin-left: 6px;
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-deploy {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+        
+        button:active {
+            transform: translateY(-1px);
+        }
+
+        .device-library {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 12px;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .device-library h2 {
+            margin-bottom: 8px;
+            color: #667eea;
+            font-size: 14px;
+        }
+
+        .device-category {
+            margin-bottom: 10px;
+        }
+
+        .device-category h3 {
+            font-size: 10px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .device-item {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 6px 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            cursor: move;
+            transition: all 0.3s ease;
+            font-size: 10px;
+            font-weight: 500;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .device-item:hover {
+            background: linear-gradient(135deg, #fff 0%, #f7fafc 100%);
+            border-color: #667eea;
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .device-item.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            background: #e2e8f0;
+        }
+
+        .device-item.disabled:hover {
+            transform: none;
+            border-color: transparent;
+        }        .device-item .name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .device-item .pins {
+            font-size: 11px;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .arduino-board {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 12px;
+            overflow: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .arduino-board h2 {
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .board-visualization {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border: 2px solid #4a5568;
+        }        .pin-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .pin-side h3 {
+            color: white;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .pin {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            padding: 6px;
+            margin-bottom: 4px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .pin::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
+        }
+
+        .pin:hover {
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            border-color: #48bb78;
+            transform: scale(1.03);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .pin.assigned {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #764ba2;
+            box-shadow: 0 0 12px rgba(118, 75, 162, 0.4);
+        }
+
+        .pin.i2c { 
+            background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
+            box-shadow: 0 0 12px rgba(246, 173, 85, 0.4);
+        }
+        .pin.spi { 
+            background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
+            box-shadow: 0 0 12px rgba(252, 129, 129, 0.4);
+        }
+        .pin.analog { 
+            background: linear-gradient(135deg, #68d391 0%, #48bb78 100%);
+            box-shadow: 0 0 12px rgba(104, 211, 145, 0.4);
+        }
+        .pin.pwm { 
+            background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+            box-shadow: 0 0 12px rgba(159, 122, 234, 0.4);
+        }
+
+        .pin-label {
+            color: white;
+            font-weight: 600;
+            font-size: 9px;
+        }
+
+        .pin-type {
+            font-size: 7px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .pin-device {
+            font-size: 7px;
+            color: #ffd700;
+            margin-top: 2px;
+        }
+
+        .config-panel {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 12px;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .config-panel h2 {
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        #config-devices {
+            min-height: 120px;
+            padding: 10px;
+            border: 2px dashed #cbd5e0;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+
+        #config-devices:empty::after {
+            content: 'Drag devices from the library to add them to your config';
+            color: #a0aec0;
+            font-size: 10px;
+            display: block;
+            text-align: center;
+            padding-top: 50px;
+        }
+
+        .config-device {
+            background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%);
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+        
+        .config-device:hover {
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .config-device .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0;
+            margin-bottom: 6px;
+            background: none;
+            box-shadow: none;
+            border-radius: 0;
+        }
+
+        .config-device .device-name {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 11px;
+        }
+
+        .config-device .remove-btn {
+            background: #fc8181;
+            color: white;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 9px;
+        }
+
+        .config-device .properties {
+            margin-top: 6px;
+        }
+
+        .property {
+            margin-bottom: 5px;
+        }
+
+        .property label {
+            display: block;
+            font-size: 9px;
+            color: #4a5568;
+            margin-bottom: 2px;
+        }
+
+        .property input,
+        .property select,
+        .property textarea {
+            width: 100%;
+            padding: 3px;
+            border: 1px solid #cbd5e0;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+
+        /* Hardware Suggestions Styling */
+        .hardware-suggestions {
+            background: linear-gradient(135deg, #fff5e6 0%, #ffe8cc 100%);
+            border-radius: 5px;
+            padding: 6px;
+            margin: 6px 0;
+            border: 2px solid #f6ad55;
+            max-height: 30px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .hardware-suggestions.expanded {
+            max-height: 500px;
+        }
+        
+        .hardware-title {
+            font-weight: 600;
+            color: #dd6b20;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+        }
+        
+        .hardware-title:hover {
+            color: #c05621;
+        }
+        
+        .toggle-icon {
+            transition: transform 0.3s ease;
+            font-size: 7px;
+        }
+        
+        .hardware-suggestions.expanded .toggle-icon {
+            transform: rotate(180deg);
+        }
+        
+        .hardware-content {
+            margin-top: 5px;
+            font-size: 8px;
+            line-height: 1.3;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .hardware-suggestions.expanded .hardware-content {
+            opacity: 1;
+        }
+        
+        .hw-item {
+            margin: 4px 0;
+            padding: 3px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 3px;
+            color: #2d3748;
+        }
+        
+        .hw-item strong {
+            color: #dd6b20;
+            display: block;
+            margin-bottom: 2px;
+            font-size: 8px;
+        }
+        
+        .hw-notes {
+            background: #fed7d7;
+            border-left: 2px solid #fc8181;
+            padding-left: 5px;
+        }
+
+        .visual-programming {
+            grid-column: 1 / -1;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 10px;
+            overflow-x: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .visual-programming h2 {
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .blocks-container {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .block {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: move;
+            font-size: 10px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+        }
+        
+        .block::before {
+            content: '⋮⋮';
+            position: absolute;
+            left: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.5;
+            font-size: 7px;
+        }
+
+        .block:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .block.control { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }
+        .block.logic { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
+        .block.sensor { background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%); }
+        .block.motor { background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%); }
+
+        .program-area {
+            background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
+            min-height: 85px;
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 8px;
+            border: 3px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+        
+        .program-area:empty::after {
+            content: '🎯 Drop programming blocks here to build your program...';
+            color: #a0aec0;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 70px;
+        }
+        
+        .program-block {
+            background: white;
+            padding: 6px 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border-left: 3px solid #667eea;
+            font-size: 9px;
+        }
+        
+        .program-block:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateX(5px);
+        }
+        
+        .program-block.control { border-left-color: #ed8936; }
+        .program-block.logic { border-left-color: #48bb78; }
+        .program-block.sensor { border-left-color: #9f7aea; }
+        .program-block.motor { border-left-color: #f6ad55; }
+        
+        .remove-block-btn {
+            background: #fc8181;
+            color: white;
+            border: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            transition: all 0.2s ease;
+        }
+        
+        .remove-block-btn:hover {
+            background: #f56565;
+            transform: scale(1.1);
+        }
+
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(45, 55, 72, 0.95);
+            color: white;
+            padding: 4px 15px;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #48bb78;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .sub-devices {
+            margin-left: 20px;
+            margin-top: 10px;
+            padding-left: 15px;
+            border-left: 2px solid #cbd5e0;
+        }
+
+        .sub-device {
+            background: #e6fffa;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .add-sub-device {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-top: 8px;
+        }
+
+        /* Photodiode transmission area */
+        .photodiode-area {
+            position: fixed;
+            bottom: 30px;
+            right: 15px;
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 3px solid #667eea;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+            transition: all 0.3s ease;
+        }
+        
+        .photodiode-area:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.6);
+        }
+        
+        .photodiode-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(45, 55, 72, 0.95);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .photodiode-icon {
+            font-size: 24px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🔧 Arduino R4 Minima Designer</h1>
+            <div class="actions">
+                <button class="btn-save" onclick="saveConfig()">💾 Save Config</button>
+                <button class="btn-deploy" onclick="deployToArduino()">🚀 Deploy to Arduino</button>
+                <button class="btn-clear" onclick="clearAll()">🗑️ Clear All</button>
+                <button class="btn-optical" onclick="testOpticalTransmission()" style="background: linear-gradient(135deg, #FFD700, #FFA500);">💡 Test Optical</button>
+            </div>
+        </div>
+
+        <!-- Device Library -->
+        <div class="device-library">
+            <h2>📦 Device Library</h2>
+            
+            <div class="device-category">
+                <h3>Motor Controllers</h3>
+                <div class="device-item" draggable="true" data-device="pca9685">
+                    <div class="name">PCA9685 16-Channel PWM</div>
+                    <div class="pins">I2C (SDA, SCL) + VCC, GND</div>
+                </div>
+            </div>
+
+            <div class="device-category">
+                <h3>Motors & Servos</h3>
+                <div class="device-item" draggable="true" data-device="mg90s">
+                    <div class="name">MG90S Servo Motor</div>
+                    <div class="pins">PWM + VCC, GND</div>
+                </div>
+            </div>
+
+            <div class="device-category">
+                <h3>Sensors</h3>
+                <div class="device-item" draggable="true" data-device="motion">
+                    <div class="name">PIR Motion Sensor</div>
+                    <div class="pins">Digital + VCC, GND</div>
+                </div>
+                <div class="device-item" draggable="true" data-device="potentiometer">
+                    <div class="name">5-Pin Potentiometer</div>
+                    <div class="pins">Analog + VCC, GND</div>
+                </div>
+                <div class="device-item" draggable="true" data-device="dht22">
+                    <div class="name">DHT22 Temp & Humidity</div>
+                    <div class="pins">Digital + VCC, GND</div>
+                </div>
+                <div class="device-item" draggable="true" data-device="9dof">
+                    <div class="name">9DOF IMU Sensor</div>
+                    <div class="pins">I2C (SDA, SCL) + VCC, GND</div>
+                </div>
+                <div class="device-item" draggable="true" data-device="photoresistor">
+                    <div class="name">Photo Resistor (LDR)</div>
+                    <div class="pins">Analog + VCC, GND</div>
+                </div>
+                <div class="device-item" draggable="true" data-device="photodiode">
+                    <div class="name">Photo Diode</div>
+                    <div class="pins">Analog + VCC, GND</div>
+                </div>
+            </div>
+
+            <div class="device-category">
+                <h3>Displays</h3>
+                <div class="device-item" draggable="true" data-device="spi_oled">
+                    <div class="name">SPI OLED Display (7-pin)</div>
+                    <div class="pins">SPI (MOSI, SCK, CS, DC, RST) + VCC, GND</div>
+                </div>
+            </div>
+
+            <div class="device-category">
+                <h3>Basic Components</h3>
+                <div class="device-item" draggable="true" data-device="button">
+                    <div class="name">Push Button</div>
+                    <div class="pins">Digital + GND</div>
+                </div>
+                <div class="device-item" draggable="true" data-device="led">
+                    <div class="name">LED</div>
+                    <div class="pins">Digital + GND</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arduino Board Visualization -->
+        <div class="arduino-board">
+            <h2>🎯 Arduino R4 Minima Pin Map</h2>
+            <div class="board-visualization">
+                <div class="pin-container">
+                    <div class="pin-side">
+                        <h3>Digital Pins (Left)</h3>
+                        <div id="digital-pins"></div>
+                    </div>
+                    <div class="pin-side">
+                        <h3>Analog Pins (Right)</h3>
+                        <div id="analog-pins"></div>
+                        <h3 style="margin-top: 20px;">Communication</h3>
+                        <div id="comm-pins"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Panel -->
+        <div class="config-panel">
+            <h2>⚙️ Current Configuration</h2>
+            <div id="config-devices">
+            </div>
+        </div>
+
+        <!-- Visual Programming -->
+        <div class="visual-programming">
+            <h2>🎨 Visual Programming (Scratch-like)</h2>
+            <div class="blocks-container">
+                <div class="block control" draggable="true">If... Then...</div>
+                <div class="block control" draggable="true">Repeat Forever</div>
+                <div class="block control" draggable="true">Wait... seconds</div>
+                <div class="block logic" draggable="true">AND</div>
+                <div class="block logic" draggable="true">OR</div>
+                <div class="block logic" draggable="true">NOT</div>
+                <div class="block sensor" draggable="true">Read Sensor</div>
+                <div class="block sensor" draggable="true">When Motion Detected</div>
+                <div class="block motor" draggable="true">Set Servo Angle</div>
+                <div class="block motor" draggable="true">Rotate Motor</div>
+            </div>
+            <div class="program-area" ondrop="drop(event)" ondragover="allowDrop(event)">
+                Drop programming blocks here...
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span>Connected to Arduino</span>
+        </div>
+        <div>
+            <span id="device-count">0 devices configured</span> | 
+            <span id="pin-usage">0/20 pins used</span>
+        </div>
+    </div>
+
+    <!-- Photodiode Data Transmission Area -->
+    <div class="photodiode-area" id="photodiode-area">
+        <div class="photodiode-icon">💡</div>
+        <div class="photodiode-label">Place your Photodiode here</div>
+    </div>
+
+    <script src="arduino_designer.js"></script>
+</body>
+</html>

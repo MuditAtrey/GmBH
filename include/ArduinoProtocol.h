@@ -155,12 +155,11 @@ public:
 
 // Payload parser helper
 class PayloadParser {
-private:
+public:
     const uint8_t* buffer;
     uint16_t length;
     uint16_t position;
     
-public:
     PayloadParser(const uint8_t* buf, uint16_t len) : buffer(buf), length(len), position(0) {}
     
     void reset() { position = 0; }
